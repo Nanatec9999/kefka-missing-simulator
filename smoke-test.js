@@ -431,12 +431,31 @@ async function run() {
     returnByValue: true,
   });
   const failureStatus = JSON.parse(failureResult.result.value);
-  socket.close();
   if (failureStatus.hidden || failureStatus.title !== "GAME OVER") {
     throw new Error(`Failure state was not triggered: ${JSON.stringify(failureStatus)}`);
   }
+  await send("Runtime.evaluate", {
+    expression: `document.getElementById("retryButton").click()`,
+  });
+  const retryResult = await send("Runtime.evaluate", {
+    expression: `JSON.stringify({
+      running: state.running,
+      playerId: state.playerId,
+      strategy: state.strategy,
+      roleModalHidden: document.getElementById("roleModal").classList.contains("hidden"),
+      resultModalHidden: document.getElementById("resultModal").classList.contains("hidden")
+    })`,
+    returnByValue: true,
+  });
+  const retryStatus = JSON.parse(retryResult.result.value);
+  socket.close();
+  if (!retryStatus.running || retryStatus.playerId !== "MT" || retryStatus.strategy !== "lean" ||
+      !retryStatus.roleModalHidden || !retryStatus.resultModalHidden) {
+    throw new Error(`Retry did not preserve the selection: ${JSON.stringify(retryStatus)}`);
+  }
   console.log(`Browser smoke test passed at ${status.time}: ${status.reason}`);
   console.log(`Failure check passed: ${failureStatus.reason}`);
+  console.log(`Retry check passed: ${retryStatus.playerId} / ${retryStatus.strategy}`);
 }
 
 run()

@@ -1109,9 +1109,7 @@ canvas.addEventListener("pointerdown", (event) => {
   };
 });
 UI.retry.addEventListener("click", () => {
-  UI.resultModal.classList.add("hidden");
-  resetSelection();
-  UI.roleModal.classList.remove("hidden");
+  startGame(state.playerId, state.strategy);
 });
 
 UI.strategyButtons.addEventListener("click", (event) => {

@@ -67,6 +67,7 @@ const TIMELINE_ITEMS = [
   [90, "最後の半面 / 終了"],
 ];
 const MARK_LABEL = { share: "頭割り", fan: "扇", circle: "円" };
+const TOWER_PRIORITY = ["healer", "tank", "melee", "ranged"];
 const keys = new Set();
 const query = new URLSearchParams(location.search);
 const querySpeed = Number(query.get("speed"));
@@ -104,19 +105,47 @@ function randomChoice(items) {
   return items[Math.floor(Math.random() * items.length)];
 }
 
-function buildGroups() {
+function shuffled(items) {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+  }
+  return result;
+}
+
+function createOpeningMarks() {
+  const marks = {};
+  const thSecondary = randomChoice(["fan", "circle"]);
+  const dpsSecondary = thSecondary === "fan" ? "circle" : "fan";
+  for (const [ids, secondary] of [
+    [["MT", "ST", "H1", "H2"], thSecondary],
+    [["D1", "D2", "D3", "D4"], dpsSecondary],
+  ]) {
+    for (const id of ids) marks[id] = secondary;
+    marks[randomChoice(ids)] = "share";
+  }
+  return marks;
+}
+
+function buildGroups(openingMarks) {
   const groupA = new Set();
-  groupA.add(randomChoice(["MT", "ST"]));
-  groupA.add("H1");
-  groupA.add(randomChoice(["D1", "D2"]));
-  groupA.add("D3");
+  for (const [higher, lower] of PAIRS) {
+    if (openingMarks[higher] === "share") groupA.add(higher);
+    else if (openingMarks[lower] === "share") groupA.add(lower);
+    else groupA.add(higher);
+  }
   return groupA;
 }
 
 function markForRound(player, round) {
-  const oddMarks = { tank: "share", healer: "fan", melee: "share", ranged: "circle" };
-  const evenMarks = { tank: "circle", healer: "fan", melee: "fan", ranged: "circle" };
-  return (round % 2 ? oddMarks : evenMarks)[player.role.category];
+  return player.marks[round];
+}
+
+function randomRoundMarks(round) {
+  return shuffled(round % 2
+    ? ["share", "share", "fan", "circle"]
+    : ["fan", "fan", "circle", "circle"]);
 }
 
 function nextRoundFor(player, afterRound = 0) {
@@ -124,8 +153,9 @@ function nextRoundFor(player, afterRound = 0) {
 }
 
 function createPlayers() {
-  const groupA = buildGroups();
-  return ROLES.map((role, index) => {
+  const openingMarks = createOpeningMarks();
+  const groupA = buildGroups(openingMarks);
+  const players = ROLES.map((role, index) => {
     const group = groupA.has(role.id) ? "A" : "B";
     const firstRound = GROUP_ROUNDS[group][0];
     return {
@@ -138,12 +168,23 @@ function createPlayers() {
       targetY: 640,
       stacks: 4,
       lastSoaked: 0,
-      mark: markForRound({ role }, firstRound),
+      marks: { [firstRound]: openingMarks[role.id] },
+      mark: openingMarks[role.id],
       markUpdatedAt: 0,
       wanderPhase: index * 1.73 + Math.random() * 0.8,
       tower: null,
     };
   });
+  for (const [group, rounds] of Object.entries(GROUP_ROUNDS)) {
+    const members = players.filter((player) => player.group === group);
+    for (const round of rounds.slice(1)) {
+      const marks = randomRoundMarks(round);
+      members.forEach((player, index) => {
+        player.marks[round] = marks[index];
+      });
+    }
+  }
+  return players;
 }
 
 function setupRoleButtons() {
@@ -204,6 +245,16 @@ function towerInfo(round) {
   return { round, group, odd: round % 2 === 1, time: TOWER_TIMES[round - 1] };
 }
 
+function markSide(player, round) {
+  const info = towerInfo(round);
+  const peers = state.players
+    .filter((member) => member.group === info.group && markForRound(member, round) === markForRound(player, round))
+    .sort((a, b) =>
+      TOWER_PRIORITY.indexOf(a.role.category) - TOWER_PRIORITY.indexOf(b.role.category)
+    );
+  return peers.indexOf(player);
+}
+
 function assignmentFor(player, round) {
   const info = towerInfo(round);
   if (player.group !== info.group) return null;
@@ -211,7 +262,7 @@ function assignmentFor(player, round) {
   if (info.odd) {
     if (mark === "fan") return { tower: 0, x: 255, y: 592, name: "塔1・外側" };
     if (mark === "circle") return { tower: 1, x: 545, y: 595, name: "塔2・外側" };
-    if (player.role.category === "tank") {
+    if (markSide(player, round) === 0) {
       const radius = TOWERS[0].r / 2;
       return {
         tower: 0,
@@ -228,10 +279,15 @@ function assignmentFor(player, round) {
       name: "塔2・左上頭割り",
     };
   }
-  if (player.role.category === "tank") return { tower: 0, x: 250, y: 590, name: "塔1・円" };
-  if (player.role.category === "healer") return { tower: 0, x: 325, y: 510, name: "塔1・扇" };
-  if (player.role.category === "melee") return { tower: 1, x: 475, y: 510, name: "塔2・扇" };
-  return { tower: 1, x: 550, y: 590, name: "塔2・円" };
+  const side = markSide(player, round);
+  if (mark === "fan") {
+    return side === 0
+      ? { tower: 0, x: 325, y: 510, name: "塔1・内側扇" }
+      : { tower: 1, x: 475, y: 510, name: "塔2・内側扇" };
+  }
+  return side === 0
+    ? { tower: 0, x: 250, y: 590, name: "塔1・外側円" }
+    : { tower: 1, x: 550, y: 590, name: "塔2・外側円" };
 }
 
 function supportPosition(player, round) {
@@ -394,7 +450,7 @@ function createSpellEffects(activePlayers, round) {
   }));
   for (const player of activePlayers) {
     const origin = snapshots.find((snapshot) => snapshot.id === player.id);
-    const mark = markForRound(player, round);
+    const mark = player.mark;
     const effect = {
       type: mark,
       sourceId: player.id,
@@ -448,9 +504,9 @@ function spellHazardFailure(effects, round) {
 
   for (const effect of effects.filter((candidate) => candidate.type === "share")) {
     const targets = state.players.filter((player) => isHitBySpell(player, effect));
-    if (targets.length < 2) {
+    if (targets.length !== 3) {
       const source = state.players.find((player) => player.id === effect.sourceId);
-      return `${source?.id || "頭割り対象"}の頭割りを2人以上で受けられていません。`;
+      return `${source?.id || "頭割り対象"}の頭割りは3人で受けます（現在${targets.length}人）。`;
     }
   }
   return null;
@@ -459,8 +515,7 @@ function spellHazardFailure(effects, round) {
 function circleTargets(round) {
   const info = towerInfo(round);
   const activeFans = state.players.filter(
-    (player) => player.group === info.group && player.role.category !== "tank" &&
-      player.role.category !== "ranged"
+    (player) => player.group === info.group && markForRound(player, round) === "fan"
   );
   const inactive = state.players.filter((player) => player.group !== info.group);
   const tank = inactive.find((player) => player.role.category === "tank");

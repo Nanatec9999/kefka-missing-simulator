@@ -75,7 +75,64 @@ async function run() {
   await send("Page.navigate", {
     url: "http://127.0.0.1:4173/?autoplay=1&speed=20&role=MT",
   });
-  await sleep(2200);
+  await sleep(250);
+  const distributionResult = await send("Runtime.evaluate", {
+    expression: `JSON.stringify((() => {
+      const countMarks = (players, round) => players.reduce((counts, player) => {
+        const mark = player.marks[round];
+        counts[mark] = (counts[mark] || 0) + 1;
+        return counts;
+      }, {});
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const players = createPlayers();
+        const byId = Object.fromEntries(players.map((player) => [player.id, player]));
+        const th = ["MT", "ST", "H1", "H2"].map((id) => byId[id]);
+        const dps = ["D1", "D2", "D3", "D4"].map((id) => byId[id]);
+        for (const family of [th, dps]) {
+          const marks = family.map((player) => player.mark);
+          const secondary = marks.filter((mark) => mark !== "share");
+          if (marks.filter((mark) => mark === "share").length !== 1 ||
+              new Set(secondary).size !== 1 || secondary.length !== 3) {
+            return { ok: false, reason: "invalid opening family", marks };
+          }
+        }
+        const thSecondary = th.find((player) => player.mark !== "share").mark;
+        const dpsSecondary = dps.find((player) => player.mark !== "share").mark;
+        if (thSecondary === dpsSecondary) {
+          return { ok: false, reason: "opening families duplicated", thSecondary, dpsSecondary };
+        }
+        for (const pair of PAIRS) {
+          const groups = pair.map((id) => byId[id].group);
+          if (groups.filter((group) => group === "A").length !== 1) {
+            return { ok: false, reason: "invalid lean pair split", pair, groups };
+          }
+        }
+        for (const [group, rounds] of Object.entries(GROUP_ROUNDS)) {
+          const members = players.filter((player) => player.group === group);
+          if (new Set(members.map((player) => player.role.category)).size !== 4) {
+            return { ok: false, reason: "group role composition", group };
+          }
+          for (const round of rounds) {
+            const counts = countMarks(members, round);
+            const expected = round % 2
+              ? { share: 2, fan: 1, circle: 1 }
+              : { fan: 2, circle: 2 };
+            if (Object.keys(expected).some((mark) => counts[mark] !== expected[mark]) ||
+                Object.keys(counts).some((mark) => counts[mark] !== expected[mark])) {
+              return { ok: false, reason: "round composition", group, round, counts };
+            }
+          }
+        }
+      }
+      return { ok: true };
+    })())`,
+    returnByValue: true,
+  });
+  const distribution = JSON.parse(distributionResult.result.value);
+  if (!distribution.ok) {
+    throw new Error(`Invalid spell hazard distribution: ${JSON.stringify(distribution)}`);
+  }
+  await sleep(1950);
   if (process.env.SMOKE_SCREENSHOT) {
     const screenshot = await send("Page.captureScreenshot", { format: "png" });
     fs.writeFileSync(process.env.SMOKE_SCREENSHOT, Buffer.from(screenshot.data, "base64"));

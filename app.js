@@ -12,14 +12,12 @@ const UI = {
   resultReason: document.getElementById("resultReason"),
   retry: document.getElementById("retryButton"),
   selectionTitle: document.getElementById("selectionTitle"),
-  selectionCopy: document.getElementById("selectionCopy"),
   strategyButtons: document.getElementById("strategyButtons"),
   spreadSelection: document.getElementById("spreadSelection"),
   spreadButtons: document.getElementById("spreadButtons"),
   roleSelection: document.getElementById("roleSelection"),
   roleButtons: document.getElementById("roleButtons"),
   strategyName: document.getElementById("strategyName"),
-  strategyDescription: document.getElementById("strategyDescription"),
   roleIcon: document.getElementById("roleIcon"),
   roleName: document.getElementById("roleName"),
   pairName: document.getElementById("pairName"),
@@ -67,24 +65,12 @@ const ROLES = [
 const PAIRS = [["MT", "ST"], ["H1", "H2"], ["D1", "D2"], ["D3", "D4"]];
 const YARN_PAIRS = [["MT", "H1"], ["ST", "H2"], ["D1", "D3"], ["D2", "D4"]];
 const STRATEGIES = {
-  lean: {
-    name: "りーん式",
-    description: "同ロールペアで判断。自分が頭割りなら先組、相方なら後組、どちらにもなければロール優先度が高い方が先組。",
-  },
-  yarn: {
-    name: "ヤーン式",
-    description: "MT-H1／ST-H2／D1-D3／D2-D4で判断。ペア内に頭割りがあれば2人とも先組、なければ2人とも後組。",
-  },
+  lean: { name: "りーん式" },
+  yarn: { name: "ヤーン式" },
 };
 const SPREAD_METHODS = {
-  kt: {
-    name: "KT式",
-    description: "既存の散開位置。奇数回は左右の塔へ寄せ、偶数回は内側扇と外側円で処理します。",
-  },
-  piren: {
-    name: "ぴれん式",
-    description: "図を基準に、奇数回は塔周辺の縦配置、偶数回は左右対称の上下配置で処理します。",
-  },
+  kt: { name: "KT式" },
+  piren: { name: "ぴれん式" },
 };
 const GROUP_ROUNDS = { A: [1, 2, 3, 8], B: [4, 5, 6, 7] };
 const TOWER_TIMES = [10, 20, 30, 40, 50, 60, 70, 80];
@@ -254,8 +240,8 @@ function selectStrategy(strategy) {
     button.classList.toggle("selected", selected);
     button.setAttribute("aria-pressed", String(selected));
   }
-  UI.selectionTitle.textContent = STRATEGIES[strategy].name;
-  UI.selectionCopy.textContent = "次に、塔処理時の散開位置を選択してください。";
+  UI.selectionTitle.textContent = "散開位置を選択";
+  UI.strategyButtons.classList.add("hidden");
   selectedSpread = null;
   for (const button of UI.spreadButtons.querySelectorAll(".spread-button")) {
     button.classList.remove("selected");
@@ -274,9 +260,8 @@ function selectSpread(spread) {
     button.setAttribute("aria-pressed", String(selected));
   }
   UI.selectionTitle.textContent = "担当ロールを選択";
-  UI.selectionCopy.textContent = "残りの7人は自動で正解位置へ移動します。あなたの担当だけを操作してください。";
   UI.strategyName.textContent = `${STRATEGIES[selectedStrategy].name} / ${SPREAD_METHODS[spread].name} · 1238 / 4567`;
-  UI.strategyDescription.textContent = `${STRATEGIES[selectedStrategy].description} ${SPREAD_METHODS[spread].description}`;
+  UI.spreadSelection.classList.add("hidden");
   UI.roleSelection.classList.remove("hidden");
 }
 
@@ -284,7 +269,7 @@ function resetSelection() {
   selectedStrategy = null;
   selectedSpread = null;
   UI.selectionTitle.textContent = "攻略法を選択";
-  UI.selectionCopy.textContent = "最初の先組・後組の決め方を選択してください。";
+  UI.strategyButtons.classList.remove("hidden");
   UI.spreadSelection.classList.add("hidden");
   UI.roleSelection.classList.add("hidden");
   for (const button of UI.strategyButtons.querySelectorAll(".strategy-button")) {

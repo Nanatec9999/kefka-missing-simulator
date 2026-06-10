@@ -239,32 +239,60 @@ async function run() {
   if (!placement.ok) {
     throw new Error(`Invalid spread placement: ${JSON.stringify(placement)}`);
   }
+  await send("Emulation.setDeviceMetricsOverride", {
+    width: 375,
+    height: 667,
+    deviceScaleFactor: 1,
+    mobile: true,
+  });
   const selectionResult = await send("Runtime.evaluate", {
     expression: `JSON.stringify((() => {
+      const modalWasHidden = UI.roleModal.classList.contains("hidden");
+      UI.roleModal.classList.remove("hidden");
       resetSelection();
+      const modalCard = UI.roleModal.querySelector(".modal-card");
+      const fitsViewport = () => {
+        const rect = modalCard.getBoundingClientRect();
+        return rect.top >= 0 && rect.bottom <= window.innerHeight &&
+          modalCard.scrollHeight <= modalCard.clientHeight;
+      };
       const before = UI.roleSelection.classList.contains("hidden");
       const spreadBefore = UI.spreadSelection.classList.contains("hidden");
+      const strategyFits = fitsViewport();
       selectStrategy("yarn");
       const afterStrategy = UI.roleSelection.classList.contains("hidden");
       const spreadAfterStrategy = UI.spreadSelection.classList.contains("hidden");
+      const spreadFits = fitsViewport();
       selectSpread("piren");
       const afterSpread = UI.roleSelection.classList.contains("hidden");
+      const roleFits = fitsViewport();
       const pair = pairIdFor("MT", "yarn");
+      UI.roleModal.classList.toggle("hidden", modalWasHidden);
       return {
         ok: before && spreadBefore && afterStrategy && !spreadAfterStrategy && !afterSpread &&
           selectedStrategy === "yarn" && selectedSpread === "piren" && pair === "H1" &&
-          UI.strategyName.textContent.includes("ヤーン式") && UI.strategyName.textContent.includes("ぴれん式"),
+          UI.strategyName.textContent.includes("ヤーン式") && UI.strategyName.textContent.includes("ぴれん式") &&
+          strategyFits && spreadFits && roleFits,
         before,
         spreadBefore,
         afterStrategy,
         spreadAfterStrategy,
         afterSpread,
+        strategyFits,
+        spreadFits,
+        roleFits,
         selectedStrategy,
         selectedSpread,
         pair,
       };
     })())`,
     returnByValue: true,
+  });
+  await send("Emulation.setDeviceMetricsOverride", {
+    width: 1200,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
   });
   const selection = JSON.parse(selectionResult.result.value);
   if (!selection.ok) {

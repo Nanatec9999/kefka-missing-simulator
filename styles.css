@@ -178,6 +178,8 @@ select { padding: 6px 8px; border: 1px solid #35425a; border-radius: 4px; backgr
 }
 .modal-card {
   width: min(760px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
   padding: clamp(25px, 5vw, 48px);
   border: 1px solid rgba(112, 145, 195, 0.28);
   border-radius: 8px;
@@ -188,24 +190,23 @@ select { padding: 6px 8px; border: 1px solid #35425a; border-radius: 4px; backgr
 .strategy-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 .strategy-button {
   display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-height: 104px;
-  padding: 18px;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  padding: 14px 18px;
   border: 1px solid #2d3a50;
   border-radius: 5px;
   background: #111927;
   color: #fff;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
   transition: 120ms ease;
 }
 .strategy-button:hover,
 .strategy-button.selected { transform: translateY(-2px); border-color: var(--cyan); background: #172438; }
 .strategy-button strong { font-size: 16px; }
-.strategy-button span { color: #9daac0; font-size: 11px; line-height: 1.6; }
 .selection-block,
-.role-selection { margin-top: 26px; padding-top: 24px; border-top: 1px solid rgba(112, 145, 195, 0.2); }
+.role-selection { margin-top: 20px; }
 .selection-block h3,
 .role-selection h3 { margin: 0 0 14px; font-size: 18px; }
 .role-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
@@ -223,9 +224,8 @@ select { padding: 6px 8px; border: 1px solid #35425a; border-radius: 4px; backgr
 }
 .role-button:hover { transform: translateY(-2px); border-color: var(--cyan); background: #172438; }
 .role-button img { width: 27px; height: 27px; object-fit: contain; }
-.strategy-note { display: flex; flex-direction: column; gap: 5px; margin-top: 22px; padding: 14px 16px; border-left: 2px solid var(--cyan); background: rgba(82,215,231,0.055); }
+.strategy-note { margin-top: 16px; padding: 10px 14px; border-left: 2px solid var(--cyan); background: rgba(82,215,231,0.055); }
 .strategy-note strong { font-size: 12px; }
-.strategy-note span { color: #9daac0; font-size: 11px; line-height: 1.6; }
 .result-card { width: min(470px, 100%); text-align: center; }
 #resultModal {
   place-items: start center;
@@ -257,6 +257,7 @@ select { padding: 6px 8px; border: 1px solid #35425a; border-radius: 4px; backgr
   .side-panel { display: flex; }
   .strategy-buttons,
   .role-buttons { grid-template-columns: repeat(2, 1fr); }
-  .modal-card { padding: 25px 18px; }
+  .modal { padding: 12px; }
+  .modal-card { max-height: calc(100dvh - 24px); padding: 20px 16px; }
   #resultModal { padding-top: 36px; }
 }

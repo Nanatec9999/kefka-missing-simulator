@@ -69,15 +69,12 @@
       <div class="modal-card">
         <p class="eyebrow">SELECT STRATEGY</p>
         <h2 id="selectionTitle">攻略法を選択</h2>
-        <p id="selectionCopy" class="modal-copy">最初の先組・後組の決め方を選択してください。</p>
         <div id="strategyButtons" class="strategy-buttons">
           <button class="strategy-button" data-strategy="yarn">
             <strong>ヤーン式</strong>
-            <span>異ロールペアに頭割りがあれば2人とも先組</span>
           </button>
           <button class="strategy-button" data-strategy="lean">
             <strong>りーん式</strong>
-            <span>同ロールペアから1人ずつ先組</span>
           </button>
         </div>
         <div id="spreadSelection" class="selection-block hidden">
@@ -85,21 +82,17 @@
           <div id="spreadButtons" class="strategy-buttons">
             <button class="strategy-button spread-button" data-spread="kt">
               <strong>KT式</strong>
-              <span>既存の散開位置</span>
             </button>
             <button class="strategy-button spread-button" data-spread="piren">
               <strong>ぴれん式</strong>
-              <span>図に合わせた奇数・偶数回の立ち位置</span>
             </button>
           </div>
         </div>
         <div id="roleSelection" class="role-selection hidden">
           <h3>担当ロールを選択</h3>
-          <p class="modal-copy">残りの7人は自動で正解位置へ移動します。あなたの担当だけを操作してください。</p>
           <div id="roleButtons" class="role-buttons"></div>
           <div class="strategy-note">
             <strong id="strategyName">りーん式 / KT式 · 1238 / 4567</strong>
-            <span id="strategyDescription"></span>
           </div>
         </div>
       </div>

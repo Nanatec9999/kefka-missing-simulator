@@ -193,7 +193,7 @@ async function run() {
         spellEffects: state.spellEffects,
         time: state.time,
       };
-      for (const spread of ["kt", "piren"]) {
+      for (const spread of ["kt", "piren", "dn"]) {
         for (let attempt = 0; attempt < 80; attempt += 1) {
           const strategy = attempt % 2 ? "yarn" : "lean";
           state.players = createPlayers(strategy);
@@ -271,7 +271,7 @@ async function run() {
       return {
         ok: before && spreadBefore && afterStrategy && !spreadAfterStrategy && !afterSpread &&
           selectedStrategy === "yarn" && selectedSpread === "piren" && pair === "H1" &&
-          UI.strategyName.textContent.includes("ヤーン式") && UI.strategyName.textContent.includes("ぴれん式") &&
+          UI.strategyName.textContent.includes("ヤーン/DN式") && UI.strategyName.textContent.includes("ぴれん式") &&
           strategyFits && spreadFits && roleFits,
         before,
         spreadBefore,

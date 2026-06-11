@@ -87,7 +87,7 @@ const STRATEGIES = {
     towerSidePriority: "supportFirst",
   },
   yarn: {
-    name: "ヤーン式",
+    name: "ヤーン/DN式",
     initialPriority: "yarn",
     towerSidePriority: "supportFirst",
   },
@@ -142,6 +142,46 @@ const SPREAD_METHODS = {
       },
     },
   },
+  dn: {
+    name: "DN式",
+    // 奇数回はぴれん式と同等。偶数回はフィールドマーカー基準:
+    // 扇=ぴれんより僅かにボス寄り、円=塔6時、
+    // 誘導(H/遠D)=D/Bマーカーのフィールド内側の端、突進誘導(近接)=タゲサ外側の上。
+    active: {
+      odd: {
+        fan: [{ tower: 0, x: 300, y: 560, name: "塔1・左誘導扇" }],
+        circle: [{ tower: 1, x: 500, y: 560, name: "塔2・下円" }],
+        share: [
+          { tower: 0, x: 300, y: 485, name: "塔1・縦頭割り" },
+          { tower: 1, x: 500, y: 450, name: "塔2・縦頭割り" },
+        ],
+      },
+      even: {
+        fan: [
+          { tower: 0, x: 313, y: 443, name: "塔1・内側扇" },
+          { tower: 1, x: 487, y: 443, name: "塔2・内側扇" },
+        ],
+        circle: [
+          { tower: 0, x: 300, y: 565, name: "塔1・6時円" },
+          { tower: 1, x: 500, y: 565, name: "塔2・6時円" },
+        ],
+      },
+    },
+    support: {
+      odd: {
+        tank: { x: 320, y: 430 },
+        healer: { x: 300, y: 580 },
+        melee: { x: 450, y: 420 },
+        ranged: { x: 455, y: 415 },
+      },
+      even: {
+        tank: { x: 400, y: 175 },
+        healer: { x: 225, y: 400 },
+        melee: { x: 400, y: 282 },
+        ranged: { x: 575, y: 400 },
+      },
+    },
+  },
   piren: {
     name: "ぴれん式",
     active: {
@@ -180,6 +220,22 @@ const SPREAD_METHODS = {
     },
   },
 };
+// DN式で使用するフィールドマーカー (A-D=円形, 1-4=四角)。中心から半径190に配置。
+const FIELD_MARKER_RADIUS = 190;
+const FIELD_MARKERS = [
+  { label: "A", angle: -90, color: "#e25d5d", shape: "circle" },
+  { label: "B", angle: 0, color: "#e3c95a", shape: "circle" },
+  { label: "C", angle: 90, color: "#5bc7e8", shape: "circle" },
+  { label: "D", angle: 180, color: "#b277e3", shape: "circle" },
+  { label: "1", angle: -45, color: "#e25d5d", shape: "square" },
+  { label: "2", angle: 45, color: "#e3c95a", shape: "square" },
+  { label: "3", angle: 135, color: "#5bc7e8", shape: "square" },
+  { label: "4", angle: -135, color: "#b277e3", shape: "square" },
+].map((marker) => ({
+  ...marker,
+  x: ARENA.x + Math.cos(marker.angle * Math.PI / 180) * FIELD_MARKER_RADIUS,
+  y: ARENA.y + Math.sin(marker.angle * Math.PI / 180) * FIELD_MARKER_RADIUS,
+}));
 const GROUP_ROUNDS = { A: [1, 2, 3, 8], B: [4, 5, 6, 7] };
 const TOWER_TIMES = [10, 20, 30, 40, 50, 60, 70, 80];
 const TIMELINE_ITEMS = [
@@ -940,11 +996,37 @@ function drawArena() {
   ctx.strokeStyle = "rgba(194,211,233,0.5)";
   ctx.stroke();
   ctx.setLineDash([]);
+  drawFieldMarkers();
   drawMechanics();
   ctx.restore();
 
   drawBoss();
   drawPlayers();
+}
+
+function drawFieldMarkers() {
+  if (state.spread !== "dn") return;
+  for (const marker of FIELD_MARKERS) {
+    ctx.save();
+    ctx.translate(marker.x, marker.y);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = marker.color;
+    ctx.fillStyle = `${marker.color}2e`;
+    ctx.beginPath();
+    if (marker.shape === "square") {
+      ctx.rect(-14, -14, 28, 28);
+    } else {
+      ctx.arc(0, 0, 15, 0, Math.PI * 2);
+    }
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = marker.color;
+    ctx.font = "900 16px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(marker.label, 0, 1);
+    ctx.restore();
+  }
 }
 
 function drawMechanics() {

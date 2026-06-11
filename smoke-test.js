@@ -625,6 +625,36 @@ async function run() {
 
   await send("Page.navigate", { url: "http://127.0.0.1:4173/?speed=20" });
   await sleep(300);
+  const restoredSelectionResult = await send("Runtime.evaluate", {
+    expression: `JSON.stringify((() => {
+      const saved = JSON.parse(localStorage.getItem(SELECTION_STORAGE_KEY));
+      return {
+        strategy: selectedStrategy,
+        spread: selectedSpread,
+        towerPriority: selectedTowerPriority,
+        saved,
+        playerId: state.playerId,
+        roleModalHidden: UI.roleModal.classList.contains("hidden"),
+        roleSelectionHidden: UI.roleSelection.classList.contains("hidden"),
+        strategySelected: UI.strategyButtons.querySelector('[data-strategy="yarn"]').classList.contains("selected"),
+        spreadSelected: UI.spreadButtons.querySelector('[data-spread="piren"]').classList.contains("selected"),
+        towerPrioritySelected: UI.towerPriorityButtons
+          .querySelector('[data-tower-priority="keepPrevious"]').classList.contains("selected"),
+      };
+    })())`,
+    returnByValue: true,
+  });
+  const restoredSelection = JSON.parse(restoredSelectionResult.result.value);
+  if (restoredSelection.strategy !== "yarn" || restoredSelection.spread !== "piren" ||
+      restoredSelection.towerPriority !== "keepPrevious" ||
+      restoredSelection.saved?.strategy !== "yarn" ||
+      restoredSelection.saved?.spread !== "piren" ||
+      restoredSelection.saved?.towerPriority !== "keepPrevious" ||
+      restoredSelection.playerId !== null || restoredSelection.roleModalHidden ||
+      restoredSelection.roleSelectionHidden || !restoredSelection.strategySelected ||
+      !restoredSelection.spreadSelected || !restoredSelection.towerPrioritySelected) {
+    throw new Error(`Selection was not restored: ${JSON.stringify(restoredSelection)}`);
+  }
   await send("Runtime.evaluate", {
     expression: `selectStrategy("lean"); selectSpread("kt"); selectTowerPriority("keepPrevious"); document.querySelector(".role-button").click()`,
   });
@@ -664,6 +694,10 @@ async function run() {
     throw new Error(`Retry did not preserve the selection: ${JSON.stringify(retryStatus)}`);
   }
   console.log(`Browser smoke test passed at ${status.time}: ${status.reason}`);
+  console.log(
+    `Storage check passed: ${restoredSelection.strategy} / ${restoredSelection.spread} / ` +
+    `${restoredSelection.towerPriority}; role not restored`
+  );
   console.log(`Failure check passed: ${failureStatus.reason}`);
   console.log(
     `Retry check passed: ${retryStatus.playerId} / ${retryStatus.strategy} / ` +

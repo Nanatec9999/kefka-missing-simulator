@@ -151,7 +151,7 @@ const SPREAD_METHODS = {
     },
   },
   dn: {
-    name: "DN式",
+    name: "はいじあ/DN式",
     // 奇数回はぴれん式と同等。偶数回はフィールドマーカー基準:
     // 扇=ぴれんより僅かにボス寄り、円=塔6時、
     // 誘導(H/遠D)=D/Bマーカーのフィールド内側の端、突進誘導(近接)=タゲサ外側の上。
@@ -161,7 +161,7 @@ const SPREAD_METHODS = {
         circle: [{ tower: 1, x: 500, y: 560, name: "塔2・下円" }],
         share: [
           { tower: 0, x: 300, y: 485, name: "塔1・縦頭割り" },
-          { tower: 1, x: 500, y: 450, name: "塔2・縦頭割り" },
+          { tower: 1, x: 487, y: 443, name: "塔2・縦頭割り" },
         ],
       },
       even: {
@@ -263,6 +263,7 @@ const keys = new Set();
 const query = new URLSearchParams(location.search);
 const querySpeed = Number(query.get("speed"));
 const autoplay = query.get("autoplay") === "1";
+const SELECTION_STORAGE_KEY = "gimmick-simulator.selection";
 
 let state = {
   running: false,
@@ -286,6 +287,33 @@ let state = {
 let selectedStrategy = null;
 let selectedSpread = null;
 let selectedTowerPriority = null;
+
+function saveSelection() {
+  try {
+    localStorage.setItem(SELECTION_STORAGE_KEY, JSON.stringify({
+      strategy: selectedStrategy,
+      spread: selectedSpread,
+      towerPriority: selectedTowerPriority,
+    }));
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
+}
+
+function restoreSelection() {
+  let saved;
+  try {
+    saved = JSON.parse(localStorage.getItem(SELECTION_STORAGE_KEY));
+  } catch {
+    return;
+  }
+  if (!saved || !STRATEGIES[saved.strategy]) return;
+  selectStrategy(saved.strategy);
+  if (!SPREAD_METHODS[saved.spread]) return;
+  selectSpread(saved.spread);
+  if (!TOWER_SIDE_PRIORITY_METHODS[saved.towerPriority]) return;
+  selectTowerPriority(saved.towerPriority);
+}
 
 if (querySpeed > 0) {
   if (![...UI.speed.options].some((option) => Number(option.value) === querySpeed)) {
@@ -444,6 +472,7 @@ function selectStrategy(strategy) {
   UI.spreadSelection.classList.remove("hidden");
   UI.towerPrioritySelection.classList.add("hidden");
   UI.roleSelection.classList.add("hidden");
+  saveSelection();
 }
 
 function selectSpread(spread) {
@@ -461,6 +490,7 @@ function selectSpread(spread) {
   }
   UI.towerPrioritySelection.classList.remove("hidden");
   UI.roleSelection.classList.add("hidden");
+  saveSelection();
 }
 
 function selectTowerPriority(method) {
@@ -475,6 +505,7 @@ function selectTowerPriority(method) {
     `${STRATEGIES[selectedStrategy].name} / ${SPREAD_METHODS[selectedSpread].name} / ` +
     `${TOWER_SIDE_PRIORITY_METHODS[method].name} · 1238 / 4567`;
   UI.roleSelection.classList.remove("hidden");
+  saveSelection();
 }
 
 function resetSelection() {
@@ -1385,6 +1416,7 @@ UI.towerPriorityButtons.addEventListener("click", (event) => {
 setupRoleButtons();
 setupTimeline();
 resetSelection();
+restoreSelection();
 drawArena();
 if (autoplay) startGame(
   query.get("role") || "MT",

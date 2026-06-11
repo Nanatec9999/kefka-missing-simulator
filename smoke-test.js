@@ -147,7 +147,7 @@ async function run() {
         if (thSecondary === dpsSecondary) {
           return { ok: false, reason: "opening families duplicated", thSecondary, dpsSecondary };
         }
-        const strategyPairs = strategy === "yarn" ? YARN_PAIRS : PAIRS;
+        const strategyPairs = initialPriorityForStrategy(strategy).pairs;
         for (const pair of strategyPairs) {
           const groups = pair.map((id) => byId[id].group);
           if (strategy === "lean" && groups.filter((group) => group === "A").length !== 1) {

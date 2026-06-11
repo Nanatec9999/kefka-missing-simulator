@@ -62,15 +62,123 @@ const ROLES = [
   { id: "D3", pair: "D4", kind: "dps", category: "ranged", color: "#e34f57", icon: "assets/DPSRole.png" },
   { id: "D4", pair: "D3", kind: "dps", category: "ranged", color: "#e34f57", icon: "assets/DPSRole.png" },
 ];
-const PAIRS = [["MT", "ST"], ["H1", "H2"], ["D1", "D2"], ["D3", "D4"]];
-const YARN_PAIRS = [["MT", "H1"], ["ST", "H2"], ["D1", "D3"], ["D2", "D4"]];
-const STRATEGIES = {
-  lean: { name: "りーん式" },
-  yarn: { name: "ヤーン式" },
+const INITIAL_PRIORITY_METHODS = {
+  lean: {
+    mode: "split-pairs",
+    // 各ペアの先頭ほど初回優先度が高い。どちらも頭割りでなければ先頭を先組にする。
+    pairs: [["MT", "ST"], ["H1", "H2"], ["D1", "D2"], ["D3", "D4"]],
+  },
+  yarn: {
+    mode: "share-pairs",
+    // 頭割り対象を含むペアを、そのペアごと先組にする。
+    pairs: [["MT", "H1"], ["ST", "H2"], ["D1", "D3"], ["D2", "D4"]],
+  },
 };
+const TOWER_SIDE_PRIORITY_METHODS = {
+  supportFirst: {
+    // 同じマーカーが2人いる回は、先にあるロールが塔1側、後が塔2側。
+    categories: ["healer", "tank", "melee", "ranged"],
+  },
+};
+const STRATEGIES = {
+  lean: {
+    name: "りーん式",
+    initialPriority: "lean",
+    towerSidePriority: "supportFirst",
+  },
+  yarn: {
+    name: "ヤーン式",
+    initialPriority: "yarn",
+    towerSidePriority: "supportFirst",
+  },
+};
+
+/*
+ * 散開座標の見方:
+ * - キャンバスは 800 x 800、左上が (0, 0)
+ * - x は右へ、y は下へ増える
+ * - ボス中央は (400, 400)
+ * - 塔1は左下 (300, 505)、塔2は右下 (500, 505)
+ *
+ * active は塔を担当する組、support は待機する組の座標。
+ * odd/even は塔の回数。各 slots は左右優先度順で、先頭が塔1側、次が塔2側。
+ * 手動調整時は x/y と表示名だけを変更し、tower は踏む塔の番号 (0=塔1, 1=塔2) を保つ。
+ */
 const SPREAD_METHODS = {
-  kt: { name: "KT式" },
-  piren: { name: "ぴれん式" },
+  kt: {
+    name: "KT式",
+    active: {
+      odd: {
+        fan: [{ tower: 0, x: 260, y: 530, name: "塔1・外側" }],
+        circle: [{ tower: 1, x: 545, y: 550, name: "塔2・外側" }],
+        share: [
+          { tower: 0, x: 323, y: 482, name: "塔1・右上頭割り" },
+          { tower: 1, x: 462, y: 467, name: "塔2・左上頭割り" },
+        ],
+      },
+      even: {
+        fan: [
+          { tower: 0, x: 330, y: 460, name: "塔1・内側扇" },
+          { tower: 1, x: 475, y: 460, name: "塔2・内側扇" },
+        ],
+        circle: [
+          { tower: 0, x: 285, y: 555, name: "塔1・外側円" },
+          { tower: 1, x: 515, y: 555, name: "塔2・外側円" },
+        ],
+      },
+    },
+    support: {
+      odd: {
+        tank: { x: 355, y: 450 },
+        healer: { x: 225, y: 560 },
+        melee: { x: 445, y: 450 },
+        ranged: { x: 475, y: 440 },
+      },
+      even: {
+        tank: { x: 330, y: 285 },
+        healer: { x: 240, y: 455 },
+        melee: { x: 470, y: 285 },
+        ranged: { x: 560, y: 455 },
+      },
+    },
+  },
+  piren: {
+    name: "ぴれん式",
+    active: {
+      odd: {
+        fan: [{ tower: 0, x: 300, y: 560, name: "塔1・左誘導扇" }],
+        circle: [{ tower: 1, x: 500, y: 560, name: "塔2・下円" }],
+        share: [
+          { tower: 0, x: 300, y: 485, name: "塔1・縦頭割り" },
+          { tower: 1, x: 500, y: 450, name: "塔2・縦頭割り" },
+        ],
+      },
+      even: {
+        fan: [
+          { tower: 0, x: 300, y: 450, name: "塔1・上扇" },
+          { tower: 1, x: 500, y: 450, name: "塔2・上扇" },
+        ],
+        circle: [
+          { tower: 0, x: 300, y: 565, name: "塔1・下円" },
+          { tower: 1, x: 500, y: 565, name: "塔2・下円" },
+        ],
+      },
+    },
+    support: {
+      odd: {
+        tank: { x: 320, y: 430 },
+        healer: { x: 300, y: 580 },
+        melee: { x: 450, y: 420 },
+        ranged: { x: 455, y: 415 },
+      },
+      even: {
+        tank: { x: 320, y: 320 },
+        healer: { x: 215, y: 505 },
+        melee: { x: 480, y: 320 },
+        ranged: { x: 585, y: 505 },
+      },
+    },
+  },
 };
 const GROUP_ROUNDS = { A: [1, 2, 3, 8], B: [4, 5, 6, 7] };
 const TOWER_TIMES = [10, 20, 30, 40, 50, 60, 70, 80];
@@ -87,7 +195,6 @@ const TIMELINE_ITEMS = [
   [90, "最後の半面 / 終了"],
 ];
 const MARK_LABEL = { share: "頭割り", fan: "扇", circle: "円" };
-const TOWER_PRIORITY = ["healer", "tank", "melee", "ranged"];
 const keys = new Set();
 const query = new URLSearchParams(location.search);
 const querySpeed = Number(query.get("speed"));
@@ -152,17 +259,32 @@ function createOpeningMarks() {
   return marks;
 }
 
+function strategyConfig(strategy) {
+  return STRATEGIES[strategy] || STRATEGIES.lean;
+}
+
+function initialPriorityForStrategy(strategy) {
+  const method = strategyConfig(strategy).initialPriority;
+  return INITIAL_PRIORITY_METHODS[method];
+}
+
+function towerSidePriorityForStrategy(strategy) {
+  const method = strategyConfig(strategy).towerSidePriority;
+  return TOWER_SIDE_PRIORITY_METHODS[method];
+}
+
 function buildGroups(openingMarks, strategy = "lean") {
+  const priority = initialPriorityForStrategy(strategy);
   const groupA = new Set();
-  if (strategy === "yarn") {
-    for (const pair of YARN_PAIRS) {
+  if (priority.mode === "share-pairs") {
+    for (const pair of priority.pairs) {
       if (pair.some((id) => openingMarks[id] === "share")) {
         pair.forEach((id) => groupA.add(id));
       }
     }
     return groupA;
   }
-  for (const [higher, lower] of PAIRS) {
+  for (const [higher, lower] of priority.pairs) {
     if (openingMarks[higher] === "share") groupA.add(higher);
     else if (openingMarks[lower] === "share") groupA.add(lower);
     else groupA.add(higher);
@@ -283,7 +405,7 @@ function resetSelection() {
 }
 
 function pairIdFor(playerId, strategy) {
-  const pairs = strategy === "yarn" ? YARN_PAIRS : PAIRS;
+  const pairs = initialPriorityForStrategy(strategy).pairs;
   const pair = pairs.find((ids) => ids.includes(playerId));
   return pair?.find((id) => id !== playerId) || "—";
 }
@@ -343,114 +465,28 @@ function towerInfo(round) {
 
 function markSide(player, round) {
   const info = towerInfo(round);
+  const priorities = towerSidePriorityForStrategy(state.strategy).categories;
   const peers = state.players
     .filter((member) => member.group === info.group && markForRound(member, round) === markForRound(player, round))
     .sort((a, b) =>
-      TOWER_PRIORITY.indexOf(a.role.category) - TOWER_PRIORITY.indexOf(b.role.category)
+      priorities.indexOf(a.role.category) - priorities.indexOf(b.role.category)
     );
   return peers.indexOf(player);
 }
 
-function ktAssignmentFor(player, round) {
-  const info = towerInfo(round);
-  if (player.group !== info.group) return null;
-  const mark = markForRound(player, round);
-  if (info.odd) {
-    if (mark === "fan") return { tower: 0, x: 260, y: 530, name: "塔1・外側" };
-    if (mark === "circle") return { tower: 1, x: 545, y: 550, name: "塔2・外側" };
-    if (markSide(player, round) === 0) {
-      const radius = TOWERS[0].r / 2;
-      return {
-        tower: 0,
-        x: TOWERS[0].x + Math.cos(-Math.PI / 4) * radius,
-        y: TOWERS[0].y + Math.sin(-Math.PI / 4) * radius,
-        name: "塔1・右上頭割り",
-      };
-    }
-    const radius = TOWERS[1].r * 0.82;
-    return {
-      tower: 1,
-      x: TOWERS[1].x + Math.cos(-3 * Math.PI / 4) * radius,
-      y: TOWERS[1].y + Math.sin(-3 * Math.PI / 4) * radius,
-      name: "塔2・左上頭割り",
-    };
-  }
-  const side = markSide(player, round);
-  if (mark === "fan") {
-    return side === 0
-      ? { tower: 0, x: 330, y: 460, name: "塔1・内側扇" }
-      : { tower: 1, x: 475, y: 460, name: "塔2・内側扇" };
-  }
-  return side === 0
-    ? { tower: 0, x: 285, y: 555, name: "塔1・外側円" }
-    : { tower: 1, x: 515, y: 555, name: "塔2・外側円" };
-}
-
-function pirenAssignmentFor(player, round) {
-  const info = towerInfo(round);
-  if (player.group !== info.group) return null;
-  const mark = markForRound(player, round);
-  if (info.odd) {
-    if (mark === "fan") return { tower: 0, x: 300, y: 560, name: "塔1・左誘導扇" };
-    if (mark === "circle") return { tower: 1, x: 500, y: 560, name: "塔2・下円" };
-    return markSide(player, round) === 0
-      ? { tower: 0, x: 300, y: 485, name: "塔1・縦頭割り" }
-      : { tower: 1, x: 500, y: 450, name: "塔2・縦頭割り" };
-  }
-  const side = markSide(player, round);
-  if (mark === "fan") {
-    return side === 0
-      ? { tower: 0, x: 300, y: 450, name: "塔1・上扇" }
-      : { tower: 1, x: 500, y: 450, name: "塔2・上扇" };
-  }
-  return side === 0
-    ? { tower: 0, x: 300, y: 565, name: "塔1・下円" }
-    : { tower: 1, x: 500, y: 565, name: "塔2・下円" };
-}
-
 function assignmentFor(player, round, spread = state.spread || "kt") {
-  return spread === "piren"
-    ? pirenAssignmentFor(player, round)
-    : ktAssignmentFor(player, round);
+  const info = towerInfo(round);
+  if (player.group !== info.group) return null;
+  const mark = markForRound(player, round);
+  const phase = info.odd ? "odd" : "even";
+  const slots = SPREAD_METHODS[spread].active[phase][mark];
+  return slots[markSide(player, round)] || null;
 }
 
 function supportPosition(player, round, spread = state.spread || "kt") {
   const info = towerInfo(round);
-  if (spread === "piren") {
-    const positions = info.odd
-      ? {
-          tank: [320, 430],
-          healer: [300, 580],
-          melee: [450, 420],
-          ranged: [455, 415],
-        }
-      : {
-          tank: [320, 320],
-          healer: [215, 505],
-          melee: [480, 320],
-          ranged: [585, 505],
-        };
-    const [x, y] = positions[player.role.category];
-    return { x, y };
-  }
-  if (!info.odd) {
-    const positions = {
-      tank: [330, 285],
-      healer: [240, 455],
-      melee: [470, 285],
-      ranged: [560, 455],
-    };
-    const [x, y] = positions[player.role.category];
-    return { x, y };
-  }
-  const positions = {
-    tank: [355, 450],
-    healer: [225, 560],
-    melee: [445, 450],
-    ranged: [475, 440],
-  };
-  const [x, y] = positions[player.role.category];
-  return { x, y };
+  const phase = info.odd ? "odd" : "even";
+  return SPREAD_METHODS[spread].support[phase][player.role.category];
 }
 
 function stackPositionFor(sourceRound) {

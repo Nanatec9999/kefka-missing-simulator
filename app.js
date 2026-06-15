@@ -183,9 +183,9 @@ const SPREAD_METHODS = {
         ranged: { x: 455, y: 415 },
       },
       even: {
-        tank: { x: 320, y: 320 },
+        tank: { x: 340, y: 300 },
         healer: { x: 225, y: 400 },
-        melee: { x: 480, y: 320 },
+        melee: { x: 460, y: 300 },
         ranged: { x: 575, y: 400 },
       },
     },

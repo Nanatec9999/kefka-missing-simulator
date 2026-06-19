@@ -342,6 +342,8 @@ const keys = new Set();
 const query = new URLSearchParams(location.search);
 const querySpeed = Number(query.get("speed"));
 const autoplay = query.get("autoplay") === "1";
+const forceDpsShareAfterEven = query.get("debug") === "dps-share-after-even" ||
+  query.get("debugDpsShare") === "1";
 const SELECTION_STORAGE_KEY = "gimmick-simulator.selection";
 
 let state = {
@@ -498,7 +500,15 @@ function markForRound(player, round) {
   return player.marks[round];
 }
 
-function randomRoundMarks(round) {
+function randomRoundMarks(round, members = null) {
+  if (forceDpsShareAfterEven && round > 1 && round % 2 === 1 && members) {
+    const nonDpsMarks = shuffled(["fan", "circle"]);
+    let nonDpsIndex = 0;
+    return members.map((member) => {
+      if (member.role.kind === "dps") return "share";
+      return nonDpsMarks[nonDpsIndex++];
+    });
+  }
   return shuffled(round % 2
     ? ["share", "share", "fan", "circle"]
     : ["fan", "fan", "circle", "circle"]);
@@ -539,7 +549,7 @@ function createPlayers(strategy = "lean") {
   for (const [group, rounds] of Object.entries(GROUP_ROUNDS)) {
     const members = players.filter((player) => player.group === group);
     for (const round of rounds.slice(1)) {
-      const marks = randomRoundMarks(round);
+      const marks = randomRoundMarks(round, members);
       members.forEach((player, index) => {
         player.marks[round] = marks[index];
       });

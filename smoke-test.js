@@ -881,11 +881,42 @@ async function run() {
     returnByValue: true,
   });
   const retryStatus = JSON.parse(retryResult.result.value);
-  socket.close();
   if (!retryStatus.running || retryStatus.playerId !== "MT" || retryStatus.strategy !== "lean" ||
       retryStatus.spread !== "kt" || retryStatus.towerPriority !== "keepPrevious" ||
       !retryStatus.roleModalHidden || !retryStatus.resultModalHidden) {
     throw new Error(`Retry did not preserve the selection: ${JSON.stringify(retryStatus)}`);
+  }
+
+  await send("Page.navigate", { url: "http://127.0.0.1:4173/?debug=dps-share-after-even" });
+  await sleep(300);
+  const debugDpsShareResult = await send("Runtime.evaluate", {
+    expression: `JSON.stringify((() => {
+      for (let attempt = 0; attempt < 80; attempt += 1) {
+        const strategy = attempt % 2 ? "yarn" : "lean";
+        const players = createPlayers(strategy);
+        for (const round of [3, 5, 7]) {
+          const members = players.filter((player) => player.group === towerInfo(round).group);
+          const shareIds = members
+            .filter((player) => player.marks[round] === "share")
+            .map((player) => player.id);
+          const nonShareMarks = members
+            .filter((player) => player.marks[round] !== "share")
+            .map((player) => player.marks[round])
+            .sort();
+          if (shareIds.length !== 2 || shareIds.some((id) => !id.startsWith("D")) ||
+              nonShareMarks.join(",") !== "circle,fan") {
+            return { ok: false, strategy, round, shareIds, nonShareMarks };
+          }
+        }
+      }
+      return { ok: true };
+    })())`,
+    returnByValue: true,
+  });
+  const debugDpsShare = JSON.parse(debugDpsShareResult.result.value);
+  socket.close();
+  if (!debugDpsShare.ok) {
+    throw new Error(`Debug DPS share mode did not force DPS shares: ${JSON.stringify(debugDpsShare)}`);
   }
   console.log(`Browser smoke test passed at ${status.time}: ${status.reason}`);
   console.log(
@@ -897,6 +928,7 @@ async function run() {
     `Retry check passed: ${retryStatus.playerId} / ${retryStatus.strategy} / ` +
     `${retryStatus.spread} / ${retryStatus.towerPriority}`
   );
+  console.log("Debug DPS share mode check passed");
 }
 
 run()

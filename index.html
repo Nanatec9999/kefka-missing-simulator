@@ -69,6 +69,7 @@
       <div class="modal-card">
         <p class="eyebrow">SELECT STRATEGY</p>
         <h2 id="selectionTitle">攻略法を選択</h2>
+        <h3>ペア決め/先組、後組の判断</h3>
         <div id="strategyButtons" class="strategy-buttons">
           <button class="strategy-button" data-strategy="yarn">
             <strong>ヤーン/DN式</strong>
@@ -86,8 +87,36 @@
             <button class="strategy-button spread-button" data-spread="piren">
               <strong>ぴれん式</strong>
             </button>
+            <button class="strategy-button spread-button" data-spread="ktdnPiren">
+              <strong>KTDNぴれん式</strong>
+            </button>
             <button class="strategy-button spread-button" data-spread="dn">
               <strong>はいじあ/DN式</strong>
+            </button>
+          </div>
+        </div>
+        <div id="initialShareSelection" class="selection-block hidden">
+          <h3>1回目の頭割り処理法を選択</h3>
+          <div id="initialShareButtons" class="strategy-buttons">
+            <button class="strategy-button initial-share-button" data-initial-share="fixed">
+              <strong>左TH / 右DPS</strong>
+            </button>
+            <button class="strategy-button initial-share-button" data-initial-share="pair">
+              <strong>ペアを見て判断</strong>
+            </button>
+          </div>
+        </div>
+        <div id="round4PrioritySelection" class="selection-block hidden">
+          <h3>4回目の塔（後組1回目）の左右を選択</h3>
+          <div id="round4PriorityButtons" class="strategy-buttons">
+            <button class="strategy-button round4-priority-button" data-round4-priority="standard">
+              <strong>通常HT近遠</strong>
+            </button>
+            <button class="strategy-button round4-priority-button" data-round4-priority="tankMeleeLeft">
+              <strong>左T近 / 右H遠</strong>
+            </button>
+            <button class="strategy-button round4-priority-button" data-round4-priority="healerRangedLeft">
+              <strong>左H遠 / 右T近</strong>
             </button>
           </div>
         </div>
@@ -98,7 +127,7 @@
               <strong>左 HT近遠 右</strong>
             </button>
             <button class="strategy-button tower-priority-button" data-tower-priority="keepPrevious">
-              <strong>前回塔維持（被りは遠い側が移動）</strong>
+              <strong>前回塔維持（被りは南側が移動）</strong>
             </button>
           </div>
         </div>

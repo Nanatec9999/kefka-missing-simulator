@@ -239,6 +239,200 @@ async function run() {
   if (!towerPriority.ok) {
     throw new Error(`Invalid tower priority handling: ${JSON.stringify(towerPriority)}`);
   }
+  const ktdnPirenResult = await send("Runtime.evaluate", {
+    expression: `JSON.stringify((() => {
+      const original = {
+        players: state.players,
+        strategy: state.strategy,
+        spread: state.spread,
+        towerPriority: state.towerPriority,
+        initialShare: state.initialShare,
+        round4Priority: state.round4Priority,
+      };
+      const makePlayer = (id, marks, x, y) => ({
+        id,
+        role: roleById(id),
+        group: "A",
+        marks,
+        x,
+        y,
+        towerOverrides: new Map(),
+        lastTower: null,
+        lastBossDistance: null,
+      });
+      const h1 = makePlayer("H1", { 1: "share", 2: "circle" }, 500, 480);
+      const mt = makePlayer("MT", { 1: "circle", 2: "circle" }, 500, 530);
+      const d3 = makePlayer("D3", { 1: "fan", 2: "fan" }, 300, 530);
+      const d4 = makePlayer("D4", { 1: "fan", 2: "fan" }, 300, 480);
+      state.players = [h1, mt, d3, d4];
+      state.strategy = "yarn";
+      state.spread = "ktdnPiren";
+      state.towerPriority = "keepPrevious";
+      state.initialShare = "fixed";
+      state.round4Priority = "healerRangedLeft";
+      recordKeepPreviousTowerPriority([[d3, d4], [h1, mt]], 1);
+      const keepPreviousAdjust = {
+        D3: assignmentFor(d3, 2).tower,
+        D4: assignmentFor(d4, 2).tower,
+      };
+      const shareMt = assignmentFor(h1, 1).tower;
+      const dpsShare = makePlayer("D1", { 1: "share" }, 300, 500);
+      state.players = [h1, mt, dpsShare, d4];
+      const fixedInitial = {
+        H1: assignmentFor(h1, 1).tower,
+        D1: assignmentFor(dpsShare, 1).tower,
+      };
+      const hFan = makePlayer("H1", { 4: "fan" }, 0, 0);
+      const tFan = makePlayer("MT", { 4: "fan" }, 0, 0);
+      const mCircle = makePlayer("D1", { 4: "circle" }, 0, 0);
+      const rCircle = makePlayer("D3", { 4: "circle" }, 0, 0);
+      for (const player of [hFan, tFan, mCircle, rCircle]) player.group = "B";
+      state.players = [hFan, tFan, mCircle, rCircle];
+      state.towerPriority = "supportFirst";
+      state.spread = "ktdnPiren";
+      const round4ByMode = Object.fromEntries(Object.keys(ROUND4_PRIORITY_METHODS).map((mode) => {
+        state.round4Priority = mode;
+        return [mode, {
+          H1: assignmentFor(hFan, 4).tower,
+          MT: assignmentFor(tFan, 4).tower,
+          D1: assignmentFor(mCircle, 4).tower,
+          D3: assignmentFor(rCircle, 4).tower,
+        }];
+      }));
+      state.players = original.players;
+      state.strategy = original.strategy;
+      state.spread = original.spread;
+      state.towerPriority = original.towerPriority;
+      state.initialShare = original.initialShare;
+      state.round4Priority = original.round4Priority;
+      return {
+        ok: keepPreviousAdjust.D3 === 1 && keepPreviousAdjust.D4 === 0 &&
+          shareMt === 0 && fixedInitial.H1 === 0 && fixedInitial.D1 === 1 &&
+          round4ByMode.standard.H1 === 0 && round4ByMode.standard.MT === 1 &&
+          round4ByMode.standard.D1 === 0 && round4ByMode.standard.D3 === 1 &&
+          round4ByMode.tankMeleeLeft.H1 === 1 && round4ByMode.tankMeleeLeft.MT === 0 &&
+          round4ByMode.tankMeleeLeft.D1 === 0 && round4ByMode.tankMeleeLeft.D3 === 1 &&
+          round4ByMode.healerRangedLeft.H1 === 0 && round4ByMode.healerRangedLeft.MT === 1 &&
+          round4ByMode.healerRangedLeft.D1 === 1 && round4ByMode.healerRangedLeft.D3 === 0,
+        keepPreviousAdjust,
+        shareMt,
+        fixedInitial,
+        round4ByMode,
+      };
+    })())`,
+    returnByValue: true,
+  });
+  const ktdnPiren = JSON.parse(ktdnPirenResult.result.value);
+  if (!ktdnPiren.ok) {
+    throw new Error(`Invalid KTDN piren handling: ${JSON.stringify(ktdnPiren)}`);
+  }
+  const dnRulesResult = await send("Runtime.evaluate", {
+    expression: `JSON.stringify((() => {
+      const original = {
+        players: state.players,
+        strategy: state.strategy,
+        spread: state.spread,
+        towerPriority: state.towerPriority,
+        initialShare: state.initialShare,
+        round4Priority: state.round4Priority,
+        selectedStrategy,
+        selectedSpread,
+        selectedTowerPriority,
+        selectedInitialShare,
+        selectedRound4Priority,
+      };
+      const makePlayer = (id, marks, group = "A") => ({
+        id,
+        role: roleById(id),
+        group,
+        marks,
+        x: 0,
+        y: 0,
+        towerOverrides: new Map(),
+        lastTower: null,
+        lastBossDistance: null,
+      });
+      state.strategy = "yarn";
+      state.spread = "dn";
+      state.towerPriority = "supportFirst";
+      state.initialShare = "fixed";
+      const hShare = makePlayer("H1", { 1: "share" });
+      const dShare = makePlayer("D1", { 1: "share" });
+      state.players = [hShare, dShare];
+      const fixedInitial = {
+        H1: assignmentFor(hShare, 1).tower,
+        D1: assignmentFor(dShare, 1).tower,
+      };
+
+      state.initialShare = "pair";
+      const mtFan = makePlayer("MT", { 1: "fan" });
+      state.players = [hShare, mtFan];
+      const pairWithFan = assignmentFor(hShare, 1).tower;
+      const mtCircle = makePlayer("MT", { 1: "circle" });
+      state.players = [hShare, mtCircle];
+      const pairWithCircle = assignmentFor(hShare, 1).tower;
+
+      const hFan = makePlayer("H1", { 4: "fan" }, "B");
+      const tFan = makePlayer("MT", { 4: "fan" }, "B");
+      const mCircle = makePlayer("D1", { 4: "circle" }, "B");
+      const rCircle = makePlayer("D3", { 4: "circle" }, "B");
+      state.players = [hFan, tFan, mCircle, rCircle];
+      const round4ByMode = Object.fromEntries(Object.keys(ROUND4_PRIORITY_METHODS).map((mode) => {
+        state.round4Priority = mode;
+        return [mode, {
+          H1: assignmentFor(hFan, 4).tower,
+          MT: assignmentFor(tFan, 4).tower,
+          D1: assignmentFor(mCircle, 4).tower,
+          D3: assignmentFor(rCircle, 4).tower,
+        }];
+      }));
+
+      resetSelection();
+      selectStrategy("yarn");
+      selectSpread("dn");
+      const ui = {
+        initialShareVisible: !UI.initialShareSelection.classList.contains("hidden"),
+        round4PriorityVisible: !UI.round4PrioritySelection.classList.contains("hidden"),
+        selectedInitialShare,
+        selectedRound4Priority,
+      };
+
+      state.players = original.players;
+      state.strategy = original.strategy;
+      state.spread = original.spread;
+      state.towerPriority = original.towerPriority;
+      state.initialShare = original.initialShare;
+      state.round4Priority = original.round4Priority;
+      selectedStrategy = original.selectedStrategy;
+      selectedSpread = original.selectedSpread;
+      selectedTowerPriority = original.selectedTowerPriority;
+      selectedInitialShare = original.selectedInitialShare;
+      selectedRound4Priority = original.selectedRound4Priority;
+      return {
+        ok: requiresInitialShare("dn") && requiresRound4Priority("dn") &&
+          fixedInitial.H1 === 0 && fixedInitial.D1 === 1 &&
+          pairWithFan === 0 && pairWithCircle === 1 &&
+          round4ByMode.standard.H1 === 0 && round4ByMode.standard.MT === 1 &&
+          round4ByMode.standard.D1 === 0 && round4ByMode.standard.D3 === 1 &&
+          round4ByMode.tankMeleeLeft.H1 === 1 && round4ByMode.tankMeleeLeft.MT === 0 &&
+          round4ByMode.tankMeleeLeft.D1 === 0 && round4ByMode.tankMeleeLeft.D3 === 1 &&
+          round4ByMode.healerRangedLeft.H1 === 0 && round4ByMode.healerRangedLeft.MT === 1 &&
+          round4ByMode.healerRangedLeft.D1 === 1 && round4ByMode.healerRangedLeft.D3 === 0 &&
+          ui.initialShareVisible && ui.round4PriorityVisible &&
+          ui.selectedInitialShare === "fixed" && ui.selectedRound4Priority === "standard",
+        fixedInitial,
+        pairWithFan,
+        pairWithCircle,
+        round4ByMode,
+        ui,
+      };
+    })())`,
+    returnByValue: true,
+  });
+  const dnRules = JSON.parse(dnRulesResult.result.value);
+  if (!dnRules.ok) {
+    throw new Error(`Invalid DN handling: ${JSON.stringify(dnRules)}`);
+  }
   const placementResult = await send("Runtime.evaluate", {
     expression: `JSON.stringify((() => {
       const original = {
@@ -248,7 +442,7 @@ async function run() {
         spellEffects: state.spellEffects,
         time: state.time,
       };
-      for (const spread of ["kt", "piren", "dn"]) {
+      for (const spread of ["kt", "piren", "ktdnPiren", "dn"]) {
         for (let attempt = 0; attempt < 80; attempt += 1) {
           const strategy = attempt % 2 ? "yarn" : "lean";
           state.players = createPlayers(strategy);

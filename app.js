@@ -15,6 +15,10 @@ const UI = {
   strategyButtons: document.getElementById("strategyButtons"),
   spreadSelection: document.getElementById("spreadSelection"),
   spreadButtons: document.getElementById("spreadButtons"),
+  initialShareSelection: document.getElementById("initialShareSelection"),
+  initialShareButtons: document.getElementById("initialShareButtons"),
+  round4PrioritySelection: document.getElementById("round4PrioritySelection"),
+  round4PriorityButtons: document.getElementById("round4PriorityButtons"),
   towerPrioritySelection: document.getElementById("towerPrioritySelection"),
   towerPriorityButtons: document.getElementById("towerPriorityButtons"),
   roleSelection: document.getElementById("roleSelection"),
@@ -84,10 +88,32 @@ const TOWER_SIDE_PRIORITY_METHODS = {
     categories: ["healer", "tank", "melee", "ranged"],
   },
   keepPrevious: {
-    name: "前回塔維持（被りは遠い側が移動）",
+    name: "前回塔維持（被りは南側が移動）",
     mode: "keep-previous",
-    // 前回と同じ塔を優先し、重複時はボスから遠い側が反対へ移る。
+    // 前回と同じ塔を優先し、重複時は南側（ボスから遠い側）が反対へ移る。
     categories: ["healer", "tank", "melee", "ranged"],
+  },
+};
+const ROUND4_PRIORITY_METHODS = {
+  standard: {
+    name: "通常HT近遠",
+    categories: ["healer", "tank", "melee", "ranged"],
+  },
+  tankMeleeLeft: {
+    name: "左T近 / 右H遠",
+    categories: ["tank", "melee", "healer", "ranged"],
+  },
+  healerRangedLeft: {
+    name: "左H遠 / 右T近",
+    categories: ["healer", "ranged", "tank", "melee"],
+  },
+};
+const SPREAD_RULE_PRESETS = {
+  dnFamily: {
+    configurableInitialShare: true,
+    configurableRound4Priority: true,
+    fixedOddMarkTowers: true,
+    keepPreviousTowerOverrides: true,
   },
 };
 const STRATEGIES = {
@@ -152,6 +178,7 @@ const SPREAD_METHODS = {
   },
   dn: {
     name: "はいじあ/DN式",
+    rules: SPREAD_RULE_PRESETS.dnFamily,
     // 奇数回はぴれん式と同等。偶数回はフィールドマーカー基準:
     // 扇=ぴれんより僅かにボス寄り、円=塔6時、
     // 誘導(H/遠D)=D/Bマーカーのフィールド内側の端、突進誘導(近接)=タゲサ外側の上。
@@ -227,6 +254,58 @@ const SPREAD_METHODS = {
       },
     },
   },
+  ktdnPiren: {
+    name: "KTDNぴれん式",
+    rules: SPREAD_RULE_PRESETS.dnFamily,
+    active: {
+      odd: {
+        fan: [
+          { tower: 0, x: 300, y: 560, name: "塔1・左誘導扇" },
+          { tower: 1, x: 500, y: 560, name: "塔2・右誘導扇" },
+        ],
+        circle: [
+          { tower: 0, x: 300, y: 560, name: "塔1・下円" },
+          { tower: 1, x: 500, y: 560, name: "塔2・下円" },
+        ],
+        share: [
+          { tower: 0, x: 300, y: 485, name: "塔1・縦頭割り" },
+          { tower: 1, x: 500, y: 450, name: "塔2・縦頭割り" },
+        ],
+      },
+      even: {
+        fan: [
+          { tower: 0, x: 300, y: 450, name: "塔1・上扇" },
+          { tower: 1, x: 500, y: 450, name: "塔2・上扇" },
+        ],
+        circle: [
+          { tower: 0, x: 300, y: 565, name: "塔1・下円" },
+          { tower: 1, x: 500, y: 565, name: "塔2・下円" },
+        ],
+      },
+    },
+    support: {
+      odd: {
+        tank: { x: 320, y: 430 },
+        healer: { x: 300, y: 580 },
+        melee: { x: 450, y: 420 },
+        ranged: { x: 455, y: 415 },
+      },
+      even: {
+        tank: { x: 320, y: 320 },
+        healer: { x: 215, y: 505 },
+        melee: { x: 480, y: 320 },
+        ranged: { x: 585, y: 505 },
+      },
+    },
+  },
+};
+const INITIAL_SHARE_MODES = {
+  fixed: {
+    name: "左がTH、右がDPSで固定",
+  },
+  pair: {
+    name: "ペアを見て判断",
+  },
 };
 // DN式で使用するフィールドマーカー (A-D=円形, 1-4=四角)。中心から半径190に配置。
 const FIELD_MARKER_RADIUS = 190;
@@ -283,10 +362,14 @@ let state = {
   strategy: null,
   spread: null,
   towerPriority: null,
+  initialShare: "fixed",
+  round4Priority: "standard",
 };
 let selectedStrategy = null;
 let selectedSpread = null;
 let selectedTowerPriority = null;
+let selectedInitialShare = null;
+let selectedRound4Priority = null;
 
 function saveSelection() {
   try {
@@ -294,10 +377,20 @@ function saveSelection() {
       strategy: selectedStrategy,
       spread: selectedSpread,
       towerPriority: selectedTowerPriority,
+      initialShare: selectedInitialShare,
+      round4Priority: selectedRound4Priority,
     }));
   } catch {
     // Storage can be unavailable in privacy-restricted browser contexts.
   }
+}
+
+function normalizeTowerPriority(method) {
+  return method === "southAdjust" ? "keepPrevious" : method;
+}
+
+function normalizeSpread(spread) {
+  return spread === "ktdn" ? "ktdnPiren" : spread;
 }
 
 function restoreSelection() {
@@ -309,10 +402,18 @@ function restoreSelection() {
   }
   if (!saved || !STRATEGIES[saved.strategy]) return;
   selectStrategy(saved.strategy);
-  if (!SPREAD_METHODS[saved.spread]) return;
-  selectSpread(saved.spread);
-  if (!TOWER_SIDE_PRIORITY_METHODS[saved.towerPriority]) return;
-  selectTowerPriority(saved.towerPriority);
+  const savedSpread = normalizeSpread(saved.spread);
+  if (!SPREAD_METHODS[savedSpread]) return;
+  selectSpread(savedSpread);
+  if (requiresInitialShare(savedSpread) && INITIAL_SHARE_MODES[saved.initialShare]) {
+    selectInitialShare(saved.initialShare);
+  }
+  if (requiresRound4Priority(savedSpread) && ROUND4_PRIORITY_METHODS[saved.round4Priority]) {
+    selectRound4Priority(saved.round4Priority);
+  }
+  const savedTowerPriority = normalizeTowerPriority(saved.towerPriority);
+  if (!TOWER_SIDE_PRIORITY_METHODS[savedTowerPriority]) return;
+  selectTowerPriority(savedTowerPriority);
 }
 
 if (querySpeed > 0) {
@@ -364,6 +465,14 @@ function initialPriorityForStrategy(strategy) {
 
 function towerSidePriority(method) {
   return TOWER_SIDE_PRIORITY_METHODS[method] || TOWER_SIDE_PRIORITY_METHODS.supportFirst;
+}
+
+function spreadMethod(spread = state.spread || "kt") {
+  return SPREAD_METHODS[normalizeSpread(spread)] || SPREAD_METHODS.kt;
+}
+
+function spreadRules(spread = state.spread || "kt") {
+  return spreadMethod(spread).rules || {};
 }
 
 function buildGroups(openingMarks, strategy = "lean") {
@@ -419,6 +528,7 @@ function createPlayers(strategy = "lean") {
       lastSoaked: 0,
       lastTower: null,
       lastBossDistance: null,
+      towerOverrides: new Map(),
       marks: { [firstRound]: openingMarks[role.id] },
       mark: openingMarks[role.id],
       markUpdatedAt: 0,
@@ -445,7 +555,14 @@ function setupRoleButtons() {
     button.className = "role-button";
     button.innerHTML = `<img src="${role.icon}" alt=""><strong>${role.id}</strong>`;
     button.addEventListener("click", () =>
-      startGame(role.id, selectedStrategy, selectedSpread, selectedTowerPriority)
+      startGame(
+        role.id,
+        selectedStrategy,
+        selectedSpread,
+        selectedTowerPriority,
+        selectedInitialShare || "fixed",
+        selectedRound4Priority || "standard"
+      )
     );
     UI.roleButtons.appendChild(button);
   }
@@ -461,6 +578,8 @@ function selectStrategy(strategy) {
   }
   selectedSpread = null;
   selectedTowerPriority = null;
+  selectedInitialShare = null;
+  selectedRound4Priority = null;
   for (const button of UI.spreadButtons.querySelectorAll(".spread-button")) {
     button.classList.remove("selected");
     button.setAttribute("aria-pressed", "false");
@@ -469,41 +588,113 @@ function selectStrategy(strategy) {
     button.classList.remove("selected");
     button.setAttribute("aria-pressed", "false");
   }
+  for (const button of UI.initialShareButtons.querySelectorAll(".initial-share-button")) {
+    button.classList.remove("selected");
+    button.setAttribute("aria-pressed", "false");
+  }
+  for (const button of UI.round4PriorityButtons.querySelectorAll(".round4-priority-button")) {
+    button.classList.remove("selected");
+    button.setAttribute("aria-pressed", "false");
+  }
   UI.spreadSelection.classList.remove("hidden");
+  UI.initialShareSelection.classList.add("hidden");
+  UI.round4PrioritySelection.classList.add("hidden");
   UI.towerPrioritySelection.classList.add("hidden");
   UI.roleSelection.classList.add("hidden");
   saveSelection();
 }
 
+function requiresInitialShare(spread) {
+  return Boolean(spreadRules(spread).configurableInitialShare);
+}
+
+function requiresRound4Priority(spread) {
+  return Boolean(spreadRules(spread).configurableRound4Priority);
+}
+
 function selectSpread(spread) {
-  if (!selectedStrategy || !SPREAD_METHODS[spread]) return;
-  selectedSpread = spread;
+  const normalizedSpread = normalizeSpread(spread);
+  if (!selectedStrategy || !SPREAD_METHODS[normalizedSpread]) return;
+  selectedSpread = normalizedSpread;
   for (const button of UI.spreadButtons.querySelectorAll(".spread-button")) {
-    const selected = button.dataset.spread === spread;
+    const selected = button.dataset.spread === normalizedSpread;
     button.classList.toggle("selected", selected);
     button.setAttribute("aria-pressed", String(selected));
   }
   selectedTowerPriority = null;
+  selectedInitialShare = null;
+  selectedRound4Priority = null;
   for (const button of UI.towerPriorityButtons.querySelectorAll(".tower-priority-button")) {
     button.classList.remove("selected");
     button.setAttribute("aria-pressed", "false");
+  }
+  for (const button of UI.initialShareButtons.querySelectorAll(".initial-share-button")) {
+    button.classList.remove("selected");
+    button.setAttribute("aria-pressed", "false");
+  }
+  for (const button of UI.round4PriorityButtons.querySelectorAll(".round4-priority-button")) {
+    button.classList.remove("selected");
+    button.setAttribute("aria-pressed", "false");
+  }
+  if (requiresInitialShare(normalizedSpread)) {
+    UI.initialShareSelection.classList.remove("hidden");
+    selectInitialShare("fixed");
+  } else {
+    UI.initialShareSelection.classList.add("hidden");
+  }
+  if (requiresRound4Priority(normalizedSpread)) {
+    UI.round4PrioritySelection.classList.remove("hidden");
+    selectRound4Priority("standard");
+  } else {
+    UI.round4PrioritySelection.classList.add("hidden");
   }
   UI.towerPrioritySelection.classList.remove("hidden");
   UI.roleSelection.classList.add("hidden");
   saveSelection();
 }
 
-function selectTowerPriority(method) {
-  if (!selectedStrategy || !selectedSpread || !TOWER_SIDE_PRIORITY_METHODS[method]) return;
-  selectedTowerPriority = method;
-  for (const button of UI.towerPriorityButtons.querySelectorAll(".tower-priority-button")) {
-    const selected = button.dataset.towerPriority === method;
+function selectInitialShare(mode) {
+  if (!selectedSpread || !requiresInitialShare(selectedSpread) || !INITIAL_SHARE_MODES[mode]) return;
+  selectedInitialShare = mode;
+  for (const button of UI.initialShareButtons.querySelectorAll(".initial-share-button")) {
+    const selected = button.dataset.initialShare === mode;
     button.classList.toggle("selected", selected);
     button.setAttribute("aria-pressed", String(selected));
   }
+  if (selectedTowerPriority) selectTowerPriority(selectedTowerPriority);
+  saveSelection();
+}
+
+function selectRound4Priority(method) {
+  if (!selectedSpread || !requiresRound4Priority(selectedSpread) || !ROUND4_PRIORITY_METHODS[method]) return;
+  selectedRound4Priority = method;
+  for (const button of UI.round4PriorityButtons.querySelectorAll(".round4-priority-button")) {
+    const selected = button.dataset.round4Priority === method;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  }
+  if (selectedTowerPriority) selectTowerPriority(selectedTowerPriority);
+  saveSelection();
+}
+
+function selectTowerPriority(method) {
+  const normalizedMethod = normalizeTowerPriority(method);
+  if (!selectedStrategy || !selectedSpread || !TOWER_SIDE_PRIORITY_METHODS[normalizedMethod]) return;
+  selectedTowerPriority = normalizedMethod;
+  for (const button of UI.towerPriorityButtons.querySelectorAll(".tower-priority-button")) {
+    const selected = button.dataset.towerPriority === normalizedMethod;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  }
+  const initialShareLabel = requiresInitialShare(selectedSpread)
+    ? ` / 初回${INITIAL_SHARE_MODES[selectedInitialShare || "fixed"].name}`
+    : "";
+  const round4Label = requiresRound4Priority(selectedSpread)
+    ? ` / 4回目${ROUND4_PRIORITY_METHODS[selectedRound4Priority || "standard"].name}`
+    : "";
   UI.strategyName.textContent =
     `${STRATEGIES[selectedStrategy].name} / ${SPREAD_METHODS[selectedSpread].name} / ` +
-    `${TOWER_SIDE_PRIORITY_METHODS[method].name} · 1238 / 4567`;
+    `${TOWER_SIDE_PRIORITY_METHODS[normalizedMethod].name}${initialShareLabel}${round4Label} · 1238 / 4567`;
   UI.roleSelection.classList.remove("hidden");
   saveSelection();
 }
@@ -512,9 +703,13 @@ function resetSelection() {
   selectedStrategy = null;
   selectedSpread = null;
   selectedTowerPriority = null;
+  selectedInitialShare = null;
+  selectedRound4Priority = null;
   UI.selectionTitle.textContent = "攻略法を選択";
   UI.strategyButtons.classList.remove("hidden");
   UI.spreadSelection.classList.add("hidden");
+  UI.initialShareSelection.classList.add("hidden");
+  UI.round4PrioritySelection.classList.add("hidden");
   UI.towerPrioritySelection.classList.add("hidden");
   UI.roleSelection.classList.add("hidden");
   for (const button of UI.strategyButtons.querySelectorAll(".strategy-button")) {
@@ -529,6 +724,14 @@ function resetSelection() {
     button.classList.remove("selected");
     button.setAttribute("aria-pressed", "false");
   }
+  for (const button of UI.initialShareButtons.querySelectorAll(".initial-share-button")) {
+    button.classList.remove("selected");
+    button.setAttribute("aria-pressed", "false");
+  }
+  for (const button of UI.round4PriorityButtons.querySelectorAll(".round4-priority-button")) {
+    button.classList.remove("selected");
+    button.setAttribute("aria-pressed", "false");
+  }
 }
 
 function pairIdFor(playerId, strategy) {
@@ -537,11 +740,20 @@ function pairIdFor(playerId, strategy) {
   return pair?.find((id) => id !== playerId) || "—";
 }
 
-function startGame(playerId, strategy = "lean", spread = "kt", towerPriority = "supportFirst") {
+function startGame(
+  playerId,
+  strategy = "lean",
+  spread = "kt",
+  towerPriority = "supportFirst",
+  initialShare = "fixed",
+  round4Priority = "standard"
+) {
   const activeStrategy = STRATEGIES[strategy] ? strategy : "lean";
-  const activeSpread = SPREAD_METHODS[spread] ? spread : "kt";
-  const activeTowerPriority = TOWER_SIDE_PRIORITY_METHODS[towerPriority]
-    ? towerPriority
+  const normalizedSpread = normalizeSpread(spread);
+  const activeSpread = SPREAD_METHODS[normalizedSpread] ? normalizedSpread : "kt";
+  const normalizedTowerPriority = normalizeTowerPriority(towerPriority);
+  const activeTowerPriority = TOWER_SIDE_PRIORITY_METHODS[normalizedTowerPriority]
+    ? normalizedTowerPriority
     : "supportFirst";
   state = {
     running: true,
@@ -566,6 +778,8 @@ function startGame(playerId, strategy = "lean", spread = "kt", towerPriority = "
     strategy: activeStrategy,
     spread: activeSpread,
     towerPriority: activeTowerPriority,
+    initialShare: INITIAL_SHARE_MODES[initialShare] ? initialShare : "fixed",
+    round4Priority: ROUND4_PRIORITY_METHODS[round4Priority] ? round4Priority : "standard",
   };
   const player = getPlayer();
   player.x = 400;
@@ -601,6 +815,83 @@ function rolePriorityTower(peers, player, priorities) {
   return ordered.indexOf(player);
 }
 
+function applyTowerOverride(player, round, tower) {
+  return player.towerOverrides?.has(round) ? player.towerOverrides.get(round) : tower;
+}
+
+function initialShareTower(player) {
+  if (state.initialShare === "fixed") {
+    return ["tank", "healer"].includes(player.role.category) ? 0 : 1;
+  }
+  const pair = initialPriorityForStrategy(state.strategy).pairs
+    .find((ids) => ids.includes(player.id));
+  const partnerId = pair?.find((id) => id !== player.id);
+  const partner = partnerId ? state.players.find((member) => member.id === partnerId) : null;
+  return partner && markForRound(partner, 1) === "fan" ? 0 : 1;
+}
+
+function usesFixedOddMarkTowers(spread = state.spread || "kt") {
+  return Boolean(spreadRules(spread).fixedOddMarkTowers);
+}
+
+function usesRound4Priority(spread = state.spread || "kt") {
+  return Boolean(spreadRules(spread).configurableRound4Priority);
+}
+
+function round4Priority(player) {
+  const method = ROUND4_PRIORITY_METHODS[state.round4Priority] || ROUND4_PRIORITY_METHODS.standard;
+  return method.categories.indexOf(player.role.category);
+}
+
+function shouldRecordKeepPreviousTowerPriority() {
+  return Boolean(spreadRules().keepPreviousTowerOverrides) &&
+    towerSidePriority(state.towerPriority).mode === "keep-previous";
+}
+
+function recordKeepPreviousTowerPriority(occupied, round) {
+  const info = towerInfo(round);
+  const active = state.players.filter((member) => member.group === info.group);
+  const next = nextRoundFor(active[0], round);
+  if (!next) return;
+
+  if (next % 2 === 0) {
+    occupied.forEach((towerMembers, towerIndex) => {
+      for (const member of towerMembers) {
+        member.towerOverrides.set(next, towerIndex);
+      }
+      if (towerMembers.length !== 2) return;
+      const [first, second] = towerMembers;
+      if (markForRound(first, next) !== markForRound(second, next)) return;
+      const ordered = [...towerMembers].sort((a, b) => {
+        if (Math.abs(a.y - b.y) > 0.001) return a.y - b.y;
+        return a.id.localeCompare(b.id);
+      });
+      ordered[0].towerOverrides.set(next, towerIndex);
+      ordered[1].towerOverrides.set(next, 1 - towerIndex);
+    });
+    return;
+  }
+
+  if (round >= 7) return;
+  for (const towerMembers of occupied) {
+    const currentTower = occupied.indexOf(towerMembers);
+    for (const member of towerMembers) {
+      if (markForRound(member, next) === "share") {
+        member.towerOverrides.set(next, currentTower);
+      }
+    }
+    if (towerMembers.length !== 2) continue;
+    const [first, second] = towerMembers;
+    if (markForRound(first, next) !== markForRound(second, next)) continue;
+    const ordered = [...towerMembers].sort((a, b) => {
+      if (Math.abs(a.y - b.y) > 0.001) return a.y - b.y;
+      return a.id.localeCompare(b.id);
+    });
+    ordered[0].towerOverrides.set(next, currentTower);
+    ordered[1].towerOverrides.set(next, 1 - currentTower);
+  }
+}
+
 function markSide(player, round) {
   const info = towerInfo(round);
   const peers = state.players
@@ -608,7 +899,15 @@ function markSide(player, round) {
       member.group === info.group && markForRound(member, round) === markForRound(player, round)
     );
   const method = towerSidePriority(state.towerPriority);
-  const fallback = rolePriorityTower(peers, player, method.categories);
+  const fallback = usesRound4Priority() && round === 4 && info.group === "B"
+    ? [...peers]
+      .sort((a, b) => {
+        const priorityDifference = round4Priority(a) - round4Priority(b);
+        if (priorityDifference !== 0) return priorityDifference;
+        return a.id.localeCompare(b.id);
+      })
+      .indexOf(player)
+    : rolePriorityTower(peers, player, method.categories);
   if (method.mode !== "keep-previous" || peers.length !== 2 ||
       peers.some((member) => member.lastTower === null)) {
     return fallback;
@@ -632,15 +931,25 @@ function assignmentFor(player, round, spread = state.spread || "kt") {
   if (player.group !== info.group) return null;
   const mark = markForRound(player, round);
   const phase = info.odd ? "odd" : "even";
-  const slots = SPREAD_METHODS[spread].active[phase][mark];
-  const tower = markSide(player, round);
+  const slots = spreadMethod(spread).active[phase][mark];
+  let tower = markSide(player, round);
+  if (usesFixedOddMarkTowers(spread) && info.odd) {
+    if (round === 1 && mark === "share") {
+      tower = initialShareTower(player);
+    } else if (mark === "fan") {
+      tower = 0;
+    } else if (mark === "circle") {
+      tower = 1;
+    }
+  }
+  tower = applyTowerOverride(player, round, tower);
   return slots.find((slot) => slot.tower === tower) || slots[0] || null;
 }
 
 function supportPosition(player, round, spread = state.spread || "kt") {
   const info = towerInfo(round);
   const phase = info.odd ? "odd" : "even";
-  return SPREAD_METHODS[spread].support[phase][player.role.category];
+  return spreadMethod(spread).support[phase][player.role.category];
 }
 
 function stackPositionFor(sourceRound) {
@@ -812,6 +1121,7 @@ function resolveTower(round) {
     fail(`${round}回目：${hazardFailure}`);
     return;
   }
+  if (shouldRecordKeepPreviousTowerPriority()) recordKeepPreviousTowerPriority(occupied, round);
   for (const member of active) {
     member.lastTower = occupied.findIndex((members) => members.includes(member));
     member.lastBossDistance = distance(member, BOSS);
@@ -1398,7 +1708,14 @@ canvas.addEventListener("pointerdown", (event) => {
   };
 });
 UI.retry.addEventListener("click", () => {
-  startGame(state.playerId, state.strategy, state.spread, state.towerPriority);
+  startGame(
+    state.playerId,
+    state.strategy,
+    state.spread,
+    state.towerPriority,
+    state.initialShare,
+    state.round4Priority
+  );
 });
 
 UI.strategyButtons.addEventListener("click", (event) => {
@@ -1413,6 +1730,14 @@ UI.towerPriorityButtons.addEventListener("click", (event) => {
   const button = event.target.closest(".tower-priority-button");
   if (button) selectTowerPriority(button.dataset.towerPriority);
 });
+UI.initialShareButtons.addEventListener("click", (event) => {
+  const button = event.target.closest(".initial-share-button");
+  if (button) selectInitialShare(button.dataset.initialShare);
+});
+UI.round4PriorityButtons.addEventListener("click", (event) => {
+  const button = event.target.closest(".round4-priority-button");
+  if (button) selectRound4Priority(button.dataset.round4Priority);
+});
 setupRoleButtons();
 setupTimeline();
 resetSelection();
@@ -1422,5 +1747,7 @@ if (autoplay) startGame(
   query.get("role") || "MT",
   query.get("strategy") || "lean",
   query.get("spread") || query.get("position") || "kt",
-  query.get("towerPriority") || query.get("tower-priority") || "supportFirst"
+  query.get("towerPriority") || query.get("tower-priority") || "supportFirst",
+  query.get("initialShare") || query.get("initial-share") || "fixed",
+  query.get("round4Priority") || query.get("round4-priority") || "standard"
 );

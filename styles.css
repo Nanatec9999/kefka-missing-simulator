@@ -261,3 +261,49 @@ select { padding: 6px 8px; border: 1px solid #35425a; border-radius: 4px; backgr
   .modal-card { max-height: calc(100dvh - 24px); padding: 20px 16px; }
   #resultModal { padding-top: 36px; }
 }
+
+/* Group Selection Styling */
+.group-select-block {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.group-select-label {
+  font-size: 14px;
+  color: var(--cyan);
+  font-weight: 700;
+}
+.group-select-options {
+  display: flex;
+  gap: 8px;
+}
+.group-radio-label {
+  position: relative;
+  cursor: pointer;
+}
+.group-radio-label input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.group-radio-label span {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #111927;
+  border: 1px solid #2d3a50;
+  border-radius: 4px;
+  color: #a0aec0;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 120ms ease;
+}
+.group-radio-label input:checked + span {
+  background: rgba(82, 215, 231, 0.15);
+  border-color: var(--cyan);
+  color: #fff;
+}
+.group-radio-label:hover span {
+  border-color: var(--cyan);
+}

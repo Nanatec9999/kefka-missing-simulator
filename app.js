@@ -68,6 +68,12 @@ const ROLES = [
   { id: "D3", pair: "D4", kind: "dps", category: "ranged", color: "#e34f57", icon: "assets/DPSRole.png" },
   { id: "D4", pair: "D3", kind: "dps", category: "ranged", color: "#e34f57", icon: "assets/DPSRole.png" },
 ];
+const roleImages = {};
+ROLES.forEach((role) => {
+  const img = new Image();
+  img.src = `assets/${role.id}.png`;
+  roleImages[role.id] = img;
+});
 const INITIAL_PRIORITY_METHODS = {
   lean: {
     mode: "split-pairs",
@@ -396,26 +402,12 @@ function normalizeSpread(spread) {
 }
 
 function restoreSelection() {
-  let saved;
-  try {
-    saved = JSON.parse(localStorage.getItem(SELECTION_STORAGE_KEY));
-  } catch {
-    return;
-  }
-  if (!saved || !STRATEGIES[saved.strategy]) return;
-  selectStrategy(saved.strategy);
-  const savedSpread = normalizeSpread(saved.spread);
-  if (!SPREAD_METHODS[savedSpread]) return;
-  selectSpread(savedSpread);
-  if (requiresInitialShare(savedSpread) && INITIAL_SHARE_MODES[saved.initialShare]) {
-    selectInitialShare(saved.initialShare);
-  }
-  if (requiresRound4Priority(savedSpread) && ROUND4_PRIORITY_METHODS[saved.round4Priority]) {
-    selectRound4Priority(saved.round4Priority);
-  }
-  const savedTowerPriority = normalizeTowerPriority(saved.towerPriority);
-  if (!TOWER_SIDE_PRIORITY_METHODS[savedTowerPriority]) return;
-  selectTowerPriority(savedTowerPriority);
+  selectedStrategy = "yarn";
+  selectedSpread = "piren";
+  selectedTowerPriority = "supportFirst";
+  selectedInitialShare = "fixed";
+  selectedRound4Priority = "standard";
+  saveSelection();
 }
 
 if (querySpeed > 0) {
@@ -442,17 +434,42 @@ function shuffled(items) {
   return result;
 }
 
-function createOpeningMarks() {
+function createOpeningMarks(playerId = null, groupPref = "random") {
   const marks = {};
   const thSecondary = randomChoice(["fan", "circle"]);
   const dpsSecondary = thSecondary === "fan" ? "circle" : "fan";
-  for (const [ids, secondary] of [
-    [["MT", "ST", "H1", "H2"], thSecondary],
-    [["D1", "D2", "D3", "D4"], dpsSecondary],
-  ]) {
-    for (const id of ids) marks[id] = secondary;
-    marks[randomChoice(ids)] = "share";
+  
+  const thIds = ["MT", "ST", "H1", "H2"];
+  const dpsIds = ["D1", "D2", "D3", "D4"];
+  
+  for (const id of thIds) marks[id] = thSecondary;
+  for (const id of dpsIds) marks[id] = dpsSecondary;
+
+  const thPairs = [["MT", "H1"], ["ST", "H2"]];
+  const dpsPairs = [["D1", "D3"], ["D2", "D4"]];
+
+  let thShareId;
+  if (playerId && thIds.includes(playerId) && groupPref !== "random") {
+    const playerPair = thPairs.find((pair) => pair.includes(playerId));
+    const otherPair = thPairs.find((pair) => !pair.includes(playerId));
+    const targetPair = groupPref === "first" ? playerPair : otherPair;
+    thShareId = randomChoice(targetPair);
+  } else {
+    thShareId = randomChoice(thIds);
   }
+  marks[thShareId] = "share";
+
+  let dpsShareId;
+  if (playerId && dpsIds.includes(playerId) && groupPref !== "random") {
+    const playerPair = dpsPairs.find((pair) => pair.includes(playerId));
+    const otherPair = dpsPairs.find((pair) => !pair.includes(playerId));
+    const targetPair = groupPref === "first" ? playerPair : otherPair;
+    dpsShareId = randomChoice(targetPair);
+  } else {
+    dpsShareId = randomChoice(dpsIds);
+  }
+  marks[dpsShareId] = "share";
+
   return marks;
 }
 
@@ -521,17 +538,21 @@ function nextRoundFor(player, afterRound = 0) {
 function createPlayers(strategy = "lean") {
   const openingMarks = createOpeningMarks();
   const groupA = buildGroups(openingMarks, strategy);
-  const players = ROLES.map((role, index) => {
+  const LAYOUT = ["MT", "ST", "D1", "D2", "H1", "H2", "D3", "D4"];
+  const players = ROLES.map((role) => {
+    const layoutIndex = LAYOUT.indexOf(role.id);
     const group = groupA.has(role.id) ? "A" : "B";
     const firstRound = GROUP_ROUNDS[group][0];
+    const x = 295 + (layoutIndex % 4) * 70;
+    const y = 620 + Math.floor(layoutIndex / 4) * 50;
     return {
       id: role.id,
       role,
       group,
-      x: 330 + (index % 4) * 46,
-      y: 675 + Math.floor(index / 4) * 38,
-      startX: 330 + (index % 4) * 46,
-      startY: 675 + Math.floor(index / 4) * 38,
+      x,
+      y,
+      startX: x,
+      startY: y,
       targetX: 400,
       targetY: 640,
       stacks: 4,
@@ -542,7 +563,7 @@ function createPlayers(strategy = "lean") {
       marks: { [firstRound]: openingMarks[role.id] },
       mark: openingMarks[role.id],
       markUpdatedAt: 0,
-      wanderPhase: index * 1.73 + Math.random() * 0.8,
+      wanderPhase: layoutIndex * 1.73 + Math.random() * 0.8,
       tower: null,
     };
   });
@@ -563,7 +584,7 @@ function setupRoleButtons() {
   for (const role of ROLES) {
     const button = document.createElement("button");
     button.className = "role-button";
-    button.innerHTML = `<img src="${role.icon}" alt=""><strong>${role.id}</strong>`;
+    button.innerHTML = `<img src="assets/${role.id}.png" alt=""><strong>${role.id}</strong>`;
     button.addEventListener("click", () =>
       startGame(
         role.id,
@@ -710,38 +731,21 @@ function selectTowerPriority(method) {
 }
 
 function resetSelection() {
-  selectedStrategy = null;
-  selectedSpread = null;
-  selectedTowerPriority = null;
-  selectedInitialShare = null;
-  selectedRound4Priority = null;
-  UI.selectionTitle.textContent = "攻略法を選択";
-  UI.strategyButtons.classList.remove("hidden");
+  selectedStrategy = "yarn";
+  selectedSpread = "piren";
+  selectedTowerPriority = "supportFirst";
+  selectedInitialShare = "fixed";
+  selectedRound4Priority = "standard";
+  UI.selectionTitle.textContent = "担当ロールを選択";
+  UI.strategyButtons.classList.add("hidden");
   UI.spreadSelection.classList.add("hidden");
   UI.initialShareSelection.classList.add("hidden");
   UI.round4PrioritySelection.classList.add("hidden");
   UI.towerPrioritySelection.classList.add("hidden");
-  UI.roleSelection.classList.add("hidden");
-  for (const button of UI.strategyButtons.querySelectorAll(".strategy-button")) {
-    button.classList.remove("selected");
-    button.setAttribute("aria-pressed", "false");
-  }
-  for (const button of UI.spreadButtons.querySelectorAll(".spread-button")) {
-    button.classList.remove("selected");
-    button.setAttribute("aria-pressed", "false");
-  }
-  for (const button of UI.towerPriorityButtons.querySelectorAll(".tower-priority-button")) {
-    button.classList.remove("selected");
-    button.setAttribute("aria-pressed", "false");
-  }
-  for (const button of UI.initialShareButtons.querySelectorAll(".initial-share-button")) {
-    button.classList.remove("selected");
-    button.setAttribute("aria-pressed", "false");
-  }
-  for (const button of UI.round4PriorityButtons.querySelectorAll(".round4-priority-button")) {
-    button.classList.remove("selected");
-    button.setAttribute("aria-pressed", "false");
-  }
+  UI.roleSelection.classList.remove("hidden");
+  UI.strategyName.textContent =
+    `${STRATEGIES[selectedStrategy].name} / ${SPREAD_METHODS[selectedSpread].name} / ` +
+    `${TOWER_SIDE_PRIORITY_METHODS[selectedTowerPriority].name} · 1238 / 4567`;
 }
 
 function pairIdFor(playerId, strategy) {
@@ -792,10 +796,8 @@ function startGame(
     round4Priority: ROUND4_PRIORITY_METHODS[round4Priority] ? round4Priority : "standard",
   };
   const player = getPlayer();
-  player.x = 400;
-  player.y = 650;
-  player.startX = player.x;
-  player.startY = player.y;
+  player.x = player.startX;
+  player.y = player.startY;
   UI.roleModal.classList.add("hidden");
   UI.resultModal.classList.add("hidden");
   updateAssignment();
@@ -1012,6 +1014,9 @@ function timedTarget(player, destination, staging, deadline) {
   const remaining = deadline - state.time;
   const travelTime = distance(player, destination) / PLAYER_MOVE_SPEED;
   const target = remaining <= travelTime + NPC_ARRIVAL_MARGIN ? destination : staging;
+  if (activeRound() === 1 && target === staging) {
+    return { x: target.x, y: target.y };
+  }
   return wanderingTarget(player, target, deadline);
 }
 
@@ -1656,20 +1661,26 @@ function drawPlayers() {
       ctx.strokeStyle = "#fff4a8";
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(0, 0, 18, 0, Math.PI * 2);
+      ctx.arc(0, 0, 20, 0, Math.PI * 2);
       ctx.stroke();
     }
-    ctx.fillStyle = player.role.color;
-    ctx.strokeStyle = "#07101b";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(0, 0, 12, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#fff";
-    ctx.font = `${controlled ? 900 : 700} 11px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.fillText(player.id, 0, 30);
+    const img = roleImages[player.id];
+    if (img && img.complete) {
+      const size = 28;
+      ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    } else {
+      ctx.fillStyle = player.role.color;
+      ctx.strokeStyle = "#07101b";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.font = `${controlled ? 900 : 700} 11px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText(player.id, 0, 30);
+    }
     ctx.restore();
   }
 }
